@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organizador WhatsApp - Obra</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f4f4f0; color: #1a1a1a; min-height: 100vh; }
+
+  .header { background: #1a5c38; color: white; padding: 1.2rem 1.5rem; display: flex; align-items: center; gap: 12px; }
+  .header h1 { font-size: 18px; font-weight: 500; }
+  .header p { font-size: 13px; opacity: 0.8; margin-top: 2px; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+
+  .drop-zone {
+    border: 2px dashed #aaa;
+    border-radius: 12px;
+    padding: 2.5rem;
+    text-align: center;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 1.5rem;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #1a5c38; background: #f0f9f4; }
+  .drop-zone input { display: none; }
+  .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-zone h2 { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+  .drop-zone p { font-size: 13px; color: #666; }
+  .drop-zone .hint { font-size: 12px; color: #999; margin-top: 8px; background: #f4f4f0; padding: 6px 12px; border-radius: 20px; display: inline-block; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+  .stat-card { background: white; border-radius: 10px; padding: 14px; text-align: center; border: 0.5px solid #e0e0e0; }
+  .stat-card .num { font-size: 26px; font-weight: 500; color: #1a5c38; }
+  .stat-card .lbl { font-size: 12px; color: #888; margin-top: 4px; }
+
+  .week-block { background: white; border-radius: 12px; margin-bottom: 1rem; border: 0.5px solid #e0e0e0; overflow: hidden; }
+  .week-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    background: #f8f8f6;
+    border-bottom: 0.5px solid #e0e0e0;
+    user-select: none;
+  }
+  .week-header:hover { background: #f0f9f4; }
+  .week-title { font-size: 15px; font-weight: 500; }
+  .week-sub { font-size: 12px; color: #888; margin-top: 2px; }
+  .week-badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 500; }
+  .badge.foto { background: #e8f4fd; color: #1565c0; }
+  .badge.video { background: #fce4ec; color: #ad1457; }
+  .badge.doc { background: #fff3e0; color: #e65100; }
+  .badge.audio { background: #f3e5f5; color: #6a1b9a; }
+  .badge.msg { background: #e8f5e9; color: #2e7d32; }
+  .chevron { font-size: 18px; color: #aaa; transition: transform 0.2s; }
+  .chevron.open { transform: rotate(180deg); }
+
+  .week-body { display: none; padding: 12px 16px; }
+  .week-body.open { display: block; }
+
+  .section-title { font-size: 12px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin: 12px 0 8px; }
+  .messages-box { background: #f8f8f6; border-radius: 8px; padding: 10px; max-height: 260px; overflow-y: auto; font-size: 13px; line-height: 1.7; }
+  .msg-line { padding: 2px 0; border-bottom: 0.5px solid #eee; }
+  .msg-line:last-child { border-bottom: none; }
+  .msg-sender { font-weight: 500; color: #1a5c38; }
+  .msg-time { font-size: 11px; color: #aaa; margin-right: 4px; }
+
+  .files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 6px; }
+  .file-item { background: #f4f4f0; border-radius: 8px; padding: 10px 8px; text-align: center; font-size: 11px; border: 0.5px solid #e0e0e0; }
+  .file-icon { font-size: 22px; margin-bottom: 4px; }
+  .file-name { word-break: break-word; color: #444; line-height: 1.3; }
+  .file-date { font-size: 10px; color: #999; margin-top: 3px; }
+
+  .download-btn {
+    background: #1a5c38; color: white; border: none; padding: 12px 28px;
+    border-radius: 8px; font-size: 14px; cursor: pointer; display: flex;
+    align-items: center; gap: 8px; margin: 1.5rem auto 0; font-weight: 500;
+  }
+  .download-btn:hover { background: #145030; }
+  .download-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+  .progress { background: #e0e0e0; border-radius: 20px; height: 6px; margin: 1rem 0; overflow: hidden; }
+  .progress-bar { height: 100%; background: #1a5c38; border-radius: 20px; transition: width 0.3s; }
+
+  .status-msg { text-align: center; font-size: 13px; color: #666; margin: 8px 0; }
+  .empty { text-align: center; padding: 2rem; color: #aaa; font-size: 14px; }
+
+  .instructions { background: white; border-radius: 12px; padding: 1.2rem 1.5rem; margin-bottom: 1.5rem; border: 0.5px solid #e0e0e0; }
+  .instructions h3 { font-size: 14px; font-weight: 500; margin-bottom: 10px; color: #1a5c38; }
+  .step { display: flex; gap: 10px; margin-bottom: 8px; align-items: flex-start; font-size: 13px; color: #555; }
+  .step-num { background: #1a5c38; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="font-size:28px;">🏗️</div>
+  <div>
+    <h1>Organizador de Obra — WhatsApp</h1>
+    <p>Clasificá archivos y mensajes de tus grupos por semana</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="instructions">
+    <h3>¿Cómo exportar el chat de WhatsApp?</h3>
+    <div class="step"><div class="step-num">1</div><span>Abrí el grupo en WhatsApp (ej: "OBRA SAN MIGUEL")</span></div>
+    <div class="step"><div class="step-num">2</div><span>Tocá los 3 puntitos → Más → <strong>Exportar chat</strong></span></div>
+    <div class="step"><div class="step-num">3</div><span>Elegí <strong>"Incluir archivos multimedia"</strong></span></div>
+    <div class="step"><div class="step-num">4</div><span>Guardá el .zip y subilo acá abajo</span></div>
+  </div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".zip">
+    <div class="drop-icon">📦</div>
+    <h2>Subí el archivo .zip exportado de WhatsApp</h2>
+    <p>Arrastrá el archivo acá o hacé clic para buscar</p>
+    <span class="hint">Soporta: fotos, videos, documentos, audios y mensajes</span>
+  </div>
+
+  <div id="progressSection" style="display:none;">
+    <div class="progress"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+    <div class="status-msg" id="statusMsg">Procesando...</div>
+  </div>
+
+  <div id="statsSection" style="display:none;">
+    <div class="stats">
+      <div class="stat-card"><div class="num" id="statSemanas">0</div><div class="lbl">Semanas</div></div>
+      <div class="stat-card"><div class="num" id="statMensajes">0</div><div class="lbl">Mensajes</div></div>
+      <div class="stat-card"><div class="num" id="statFotos">0</div><div class="lbl">Fotos</div></div>
+      <div class="stat-card"><div class="num" id="statVideos">0</div><div class="lbl">Videos</div></div>
+      <div class="stat-card"><div class="num" id="statDocs">0</div><div class="lbl">Documentos</div></div>
+      <div class="stat-card"><div class="num" id="statAudios">0</div><div class="lbl">Audios</div></div>
+    </div>
+    <div id="weeksContainer"></div>
+    <button class="download-btn" id="downloadBtn">⬇ Descargar todo organizado en carpetas</button>
+  </div>
+
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+let parsedData = null;
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+async function handleFile(file) {
+  if (!file || !file.name.endsWith('.zip')) { alert('Por favor subí un archivo .zip exportado de WhatsApp.'); return; }
+  document.getElementById('progressSection').style.display = 'block';
+  document.getElementById('statsSection').style.display = 'none';
+  setProgress(10, 'Leyendo archivo...');
+
+  const zip = new JSZip();
+  const content = await zip.loadAsync(file);
+  setProgress(30, 'Buscando mensajes...');
+
+  let txtFile = null;
+  let txtContent = '';
+  const mediaFiles = {};
+
+  for (const [name, entry] of Object.entries(content.files)) {
+    const fname = name.split('/').pop();
+    if (!entry.dir) {
+      if (fname.endsWith('.txt') && !txtFile) {
+        txtContent = await entry.async('string');
+        txtFile = fname;
+      } else {
+        mediaFiles[fname] = entry;
+      }
+    }
+  }
+
+  if (!txtContent) { alert('No se encontró el archivo de mensajes .txt dentro del ZIP. Asegurate de exportar el chat correctamente.'); return; }
+
+  setProgress(60, 'Clasificando por semanas...');
+  parsedData = parseChat(txtContent, mediaFiles);
+  setProgress(90, 'Construyendo vista...');
+
+  renderResults(parsedData);
+  setProgress(100, 'Listo.');
+  setTimeout(() => document.getElementById('progressSection').style.display = 'none', 800);
+  document.getElementById('statsSection').style.display = 'block';
+}
+
+function setProgress(pct, msg) {
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('statusMsg').textContent = msg;
+}
+
+function getWeekKey(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const mon = new Date(d.setDate(diff));
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const fmt = d2 => d2.toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return { key: mon.toISOString().slice(0, 10), label: `Semana del ${fmt(mon)} al ${fmt(sun)}` };
+}
+
+function parseDate(str) {
+  // Formats: d/m/yy, d/m/yyyy, dd/mm/yy, dd/mm/yyyy
+  const m = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (!m) return null;
+  let y = parseInt(m[3]); if (y < 100) y += 2000;
+  return new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+}
+
+function parseChat(text, mediaFiles) {
+  const lines = text.split('\n');
+  // Match: dd/mm/yy, HH:MM - Sender: message
+  const lineRegex = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[APap][Mm])?)\s*[-–]\s*([^:]+?):\s*(.+)/;
+  const sysRegex = /^(\d{1,2}\/\d{1,2}\/\d{2,4}),\s*(\d{1,2}:\d{2})/;
+  const mediaRegex = /<adjunto:\s*(.+?)>|<Media omitted>|<archivo adjunto:\s*(.+?)>/i;
+  const fileNameRegex = /([^\s]+\.(jpg|jpeg|png|gif|mp4|3gp|pdf|doc|docx|xls|xlsx|opus|ogg|mp3|wav|aac|webp))/i;
+
+  const weeks = {};
+  let totalMsg = 0, totalFoto = 0, totalVideo = 0, totalDoc = 0, totalAudio = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const match = line.match(lineRegex);
+    if (!match) continue;
+    const [, dateStr, timeStr, sender, body] = match;
+    const date = parseDate(dateStr);
+    if (!date) continue;
+    const { key, label } = getWeekKey(date);
+    if (!weeks[key]) weeks[key] = { label, key, messages: [], media: [] };
+
+    const mediaMatch = body.match(mediaRegex);
+    const fileMatch = body.match(fileNameRegex);
+    const attachedName = mediaMatch ? (mediaMatch[1] || mediaMatch[2]) : (fileMatch ? fileMatch[1] : null);
+
+    if (attachedName) {
+      const ext = attachedName.split('.').pop().toLowerCase();
+      let type = 'doc';
+      if (['jpg','jpeg','png','gif','webp'].includes(ext)) { type = 'foto'; totalFoto++; }
+      else if (['mp4','3gp','mov'].includes(ext)) { type = 'video'; totalVideo++; }
+      else if (['opus','ogg','mp3','wav','aac'].includes(ext)) { type = 'audio'; totalAudio++; }
+      else { totalDoc++; }
+      weeks[key].media.push({ name: attachedName, type, date: dateStr, time: timeStr, sender, entry: mediaFiles[attachedName] });
+    } else {
+      totalMsg++;
+      weeks[key].messages.push({ date: dateStr, time: timeStr, sender, body });
+    }
+  }
+
+  const sorted = Object.values(weeks).sort((a, b) => a.key.localeCompare(b.key));
+  return { weeks: sorted, totalMsg, totalFoto, totalVideo, totalDoc, totalAudio };
+}
+
+function fileIcon(type) {
+  if (type === 'foto') return '🖼️';
+  if (type === 'video') return '🎬';
+  if (type === 'audio') return '🎤';
+  return '📄';
+}
+
+function renderResults(data) {
+  document.getElementById('statSemanas').textContent = data.weeks.length;
+  document.getElementById('statMensajes').textContent = data.totalMsg;
+  document.getElementById('statFotos').textContent = data.totalFoto;
+  document.getElementById('statVideos').textContent = data.totalVideo;
+  document.getElementById('statDocs').textContent = data.totalDoc;
+  document.getElementById('statAudios').textContent = data.totalAudio;
+
+  const container = document.getElementById('weeksContainer');
+  container.innerHTML = '';
+
+  if (data.weeks.length === 0) {
+    container.innerHTML = '<div class="empty">No se encontraron semanas con datos.</div>';
+    return;
+  }
+
+  data.weeks.forEach((week, idx) => {
+    const totalFiles = week.media.length;
+    const fotos = week.media.filter(m => m.type === 'foto').length;
+    const videos = week.media.filter(m => m.type === 'video').length;
+    const docs = week.media.filter(m => m.type === 'doc').length;
+    const audios = week.media.filter(m => m.type === 'audio').length;
+
+    const block = document.createElement('div');
+    block.className = 'week-block';
+    block.innerHTML = `
+      <div class="week-header" onclick="toggleWeek(${idx})">
+        <div>
+          <div class="week-title">📅 ${week.label}</div>
+          <div class="week-sub">${week.messages.length} mensajes · ${totalFiles} archivos</div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div class="week-badges">
+            ${fotos ? `<span class="badge foto">🖼️ ${fotos}</span>` : ''}
+            ${videos ? `<span class="badge video">🎬 ${videos}</span>` : ''}
+            ${docs ? `<span class="badge doc">📄 ${docs}</span>` : ''}
+            ${audios ? `<span class="badge audio">🎤 ${audios}</span>` : ''}
+            ${week.messages.length ? `<span class="badge msg">💬 ${week.messages.length}</span>` : ''}
+          </div>
+          <div class="chevron" id="chev-${idx}">▼</div>
+        </div>
+      </div>
+      <div class="week-body" id="body-${idx}">
+        ${week.messages.length ? `
+          <div class="section-title">Mensajes de texto</div>
+          <div class="messages-box">
+            ${week.messages.map(m => `
+              <div class="msg-line">
+                <span class="msg-time">${m.time}</span>
+                <span class="msg-sender">${m.sender}:</span>
+                ${escapeHtml(m.body)}
+              </div>`).join('')}
+          </div>` : ''}
+        ${week.media.length ? `
+          <div class="section-title">Archivos adjuntos</div>
+          <div class="files-grid">
+            ${week.media.map(m => `
+              <div class="file-item">
+                <div class="file-icon">${fileIcon(m.type)}</div>
+                <div class="file-name">${escapeHtml(m.name)}</div>
+                <div class="file-date">${m.date} ${m.time}</div>
+              </div>`).join('')}
+          </div>` : ''}
+      </div>
+    `;
+    container.appendChild(block);
+  });
+}
+
+function toggleWeek(idx) {
+  const body = document.getElementById('body-' + idx);
+  const chev = document.getElementById('chev-' + idx);
+  body.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.getElementById('downloadBtn').addEventListener('click', async () => {
+  if (!parsedData) return;
+  const btn = document.getElementById('downloadBtn');
+  btn.disabled = true; btn.textContent = 'Generando ZIP...';
+
+  const zip = new JSZip();
+  for (const week of parsedData.weeks) {
+    const folderName = week.label.replace(/[\/\\:*?"<>|]/g, '-');
+    const folder = zip.folder(folderName);
+
+    if (week.messages.length) {
+      const lines = week.messages.map(m => `[${m.date} ${m.time}] ${m.sender}: ${m.body}`).join('\n');
+      folder.file('mensajes.txt', lines);
+    }
+
+    for (const m of week.media) {
+      if (m.entry) {
+        const data = await m.entry.async('uint8array');
+        folder.file(m.name, data);
+      } else {
+        folder.file('archivos-no-disponibles.txt', m.name + '\n', { createFolders: false });
+      }
+    }
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  saveAs(blob, 'obra-organizada.zip');
+  btn.disabled = false; btn.innerHTML = '⬇ Descargar todo organizado en carpetas';
+});
+</script>
+</body>
+</html>
